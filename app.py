@@ -36,6 +36,26 @@ def clean_for_filename(s: str) -> str:
     return s
 
 
+def ensure_unique_path(directory: Path, filename: str) -> Path:
+    """
+    Evita que un PDF pise a otro si terminan con el mismo nombre.
+    Ejemplo:
+    archivo.pdf
+    archivo (1).pdf
+    archivo (2).pdf
+    """
+    base = Path(filename).stem
+    ext = Path(filename).suffix
+    candidate = directory / filename
+    i = 1
+
+    while candidate.exists():
+        candidate = directory / f"{base} ({i}){ext}"
+        i += 1
+
+    return candidate
+
+
 def read_pdf_text(pdf_bytes: bytes) -> str:
     """Extrae texto del PDF. Primero pdfplumber; si queda muy vacío y hay PyMuPDF, usa fallback."""
     text = ""
@@ -283,7 +303,7 @@ def process_pdfs(pdf_files, mapping, output_dir: Path):
         if not nuevo_nombre.lower().endswith(".pdf"):
             nuevo_nombre += ".pdf"
 
-        out_path = output_dir / nuevo_nombre
+        out_path = ensure_unique_path(output_dir, nuevo_nombre)
         with open(out_path, "wb") as w:
             w.write(pdf_bytes)
 
@@ -294,7 +314,7 @@ def process_pdfs(pdf_files, mapping, output_dir: Path):
             "proveedor": proveedor,
             "numero_factura": numero_factura,
             "bl_detectado": bl_detectado or "",
-            "nuevo_nombre": nuevo_nombre,
+            "nuevo_nombre": out_path.name,
             "debug_tokens": " | ".join(debug_tokens) if debug_tokens else ""
         })
 
@@ -367,6 +387,10 @@ if excel_file and pdf_files:
 
             st.subheader("Resultados")
             st.dataframe(report, use_container_width=True)
+
+            st.write(f"PDFs subidos: {len(pdf_files)}")
+            st.write(f"Filas del reporte: {len(report)}")
+            st.write(f"PDFs guardados en carpeta: {len(list(out_dir.glob('*.pdf')))}")
 
             zip_bytes = make_zip(out_dir, report)
             st.download_button(
